@@ -29,15 +29,11 @@ class Socks5Server(SocketServer.StreamRequestHandler):
             reply = b"\x05\x00\x00\x01"
             try:
                 if mode == 1:  # 1. Tcp connect
-                    #remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    #remote.connect((addr, port[0]))
-                    print 'Tcp connect to', addr, port[0]
-                    # connect to server-server
+                    # connect to another socks5 proxy server
                     remote = socks.socksocket()
-                    remote.setproxy(socks.PROXY_TYPE_SOCKS5, "106.186.114.228", 1080)
-                    print "#### proxy set"
+                    remote.setproxy(socks.PROXY_TYPE_SOCKS5, "127.0.0.1", 1080)
                     remote.connect((addr, port[0]))
-                    print '##### socks to socks server connect'
+                    print 'Tcp connect to', addr, port[0]
                 else:
                     reply = b"\x05\x07\x00\x01" # Command not supported
                 local = remote.getsockname()
