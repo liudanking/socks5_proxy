@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "bufio"
+	_ "errors"
 	"fmt"
 	"io"
 	"log"
@@ -24,6 +25,7 @@ func (sp *socks5proxy) ListenAndServe(network, localAddr string) {
 		if err != nil {
 			log.Fatal(err)
 		}
+		//defer conn.Close()
 		go handle(conn)
 	}
 }
@@ -33,6 +35,7 @@ func handle(conn net.Conn) {
 	if _, err := io.ReadFull(conn, buf[:3]); err != nil {
 		log.Fatal(err)
 	}
+
 	// 1. version
 	if buf[0] != 0x05 {
 		fmt.Printf("version 0x%02x not support", buf[0])
@@ -45,7 +48,8 @@ func handle(conn net.Conn) {
 	addr := ""
 	if addrType == 1 { // ipv4
 		io.ReadFull(conn, buf[:4])
-		addr = string(net.IPv4(buf[0], buf[1], buf[2], buf[3]))
+		addr = net.IPv4(buf[0], buf[1], buf[2], buf[3]).String()
+		fmt.Println("address:", addr, buf[:4])
 	} else if addrType == 3 { // domain name
 		io.ReadFull(conn, buf[:1])
 		length := int(buf[0])
@@ -54,44 +58,70 @@ func handle(conn net.Conn) {
 	}
 	io.ReadFull(conn, buf[:2])
 	port := int(buf[0])<<8 + int(buf[1])
-	fmt.Printf("0x%02x 0x%02x", buf[0], buf[1])
 	reply := []byte{0x05, 0x00, 0x00, 0x01}
 
 	var remote net.Conn
 	if cmd == 1 { //   1. tcp connection
-		laddr := addr + ":" + fmt.Sprintf("%d", port)
-		fmt.Println("tcp connect to ", laddr)
-		_remote, err := net.Dial("tcp", laddr)
+		addrDest := fmt.Sprintf("%s:%d", addr, port)
+		remoteTmp, err := net.Dial("tcp", addrDest)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Println("locate: ", err)
+			return
 		}
-		fmt.Println("already connect to ", addr, port)
-		remote = _remote
-		fmt.Println(remote.RemoteAddr().String())
+
+		fmt.Println("connected to ", addr, port)
+		remote = remoteTmp
 		host, portStr, _ := net.SplitHostPort(remote.RemoteAddr().String())
 		remoteIP := net.ParseIP(host)
 		reply = append(reply, remoteIP[0], remoteIP[1], remoteIP[2], remoteIP[3])
 		port, _ := strconv.ParseUint(portStr, 10, 16)
 		reply = append(reply, byte(port>>8), byte(port))
-		//append(remote, strconv.par)
 	} else { // command not supported
 		reply = []byte{0x05, 0x07, 0x00, 0x01}
 	}
+
 	conn.Write(reply)
 
-	if reply[1] == 0x00 {
+	if reply[1] == 0x00 { // transfer data
 		if cmd == 1 {
-			fmt.Println("transfer")
-
-			go io.Copy(remote, conn)
-			go io.Copy(conn, remote)
+			if false { // only for development
+				go handle_connection_direct(conn, remote)
+				go handle_connection_direct(remote, conn)
+			} else {
+				go handle_connection_encrypt(conn, remote)
+				go handle_connection_encrypt(remote, conn)
+			}
 		}
 	}
 
 }
 
+func handle_connection_direct(from, to net.Conn) {
+	io.Copy(to, from)
+	from.Close()
+	to.Close()
+}
+
+func handle_connection_encrypt(from, to net.Conn) {
+	buf := make([]byte, 4096, 4096)
+	for {
+		length := 0
+		if _length, err := from.Read(buf); /*err == io.EOF &&*/ _length == 0 {
+			length = _length
+			fmt.Println("io read over", length, err)
+			break
+		} else {
+			length = _length
+		}
+		to.Write(buf[:length])
+		//fmt.Printf("length: %d\n", length)
+	}
+	from.Close()
+	to.Close()
+}
+
 func main() {
 	sp := &socks5proxy{}
-	sp.ListenAndServe("tcp", ":8084")
+	sp.ListenAndServe("tcp", ":1080")
 
 }
