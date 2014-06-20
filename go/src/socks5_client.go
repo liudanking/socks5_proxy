@@ -65,9 +65,12 @@ func handle(conn net.Conn) {
 	if cmd == 1 { //   1. tcp connection
 		addrDest := fmt.Sprintf("%s:%d", addr, port)
 		//remoteTmp, err := net.Dial("tcp", addrDest)
-		remoteTmp, err := socks5.DialSocksProxy(socks5.SOCKS5, "127.0.0.1:1080")("", addrDest)
+		//remoteTmp, err := socks5.DialSocksProxy(socks5.SOCKS5, "127.0.0.1:1080")("", addrDest)
+		remoteTmp, err := socks5.DialSocks5("127.0.0.1:1080", addrDest)
 		if err != nil {
 			fmt.Println("locate: ", err)
+			conn.Close()
+			remoteTmp.Close()
 			return
 		}
 

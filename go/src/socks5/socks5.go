@@ -44,6 +44,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"secureconn"
 	"strconv"
 )
 
@@ -52,6 +53,7 @@ const (
 	SOCKS4 = iota
 	SOCKS4A
 	SOCKS5
+	SOCKSTEST
 )
 
 // DialSocksProxy returns the dial function to be used in http.Transport object.
@@ -70,9 +72,14 @@ func DialSocksProxy(socksType int, proxy string) func(string, string) (net.Conn,
 	}
 }
 
+func DialSocks5(proxy, targetAddr string) (conn net.Conn, err error) {
+	conn, err = dialSocks5(proxy, targetAddr)
+	return
+}
+
 func dialSocks5(proxy, targetAddr string) (conn net.Conn, err error) {
 	// dial TCP
-	conn, err = net.Dial("tcp", proxy)
+	conn, err = secureconn.DialSecureConn("tcp", proxy, secureconn.RC4, []byte{1, 2, 3}) //net.Dial("tcp", proxy)
 	if err != nil {
 		return
 	}
@@ -115,6 +122,11 @@ func dialSocks5(proxy, targetAddr string) (conn net.Conn, err error) {
 	} else if len(resp) != 10 {
 		err = errors.New("Server does not respond properly.")
 	} else if resp[1] != 0 {
+		for _, value := range resp {
+			fmt.Printf("%02x ", value)
+		}
+		fmt.Printf("\n")
+
 		err = errors.New("Can't complete SOCKS5 connection.")
 	}
 

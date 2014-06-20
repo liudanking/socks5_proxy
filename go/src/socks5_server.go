@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"secureconn"
 	"strconv"
 )
 
@@ -26,11 +27,12 @@ func (sp *socks5proxy) ListenAndServe(network, localAddr string) {
 			log.Fatal(err)
 		}
 		//defer conn.Close()
-		go handle(conn)
+		sConn := secureconn.NewSecureConn(conn, secureconn.RC4, []byte{1, 2, 3})
+		go handle(sConn)
 	}
 }
 
-func handle(conn net.Conn) {
+func handle(conn secureconn.SecureConn) {
 	buf := make([]byte, 262, 262)
 	if _, err := io.ReadFull(conn, buf[:3]); err != nil {
 		log.Fatal(err)
