@@ -2,10 +2,9 @@ package main
 
 import (
 	_ "bufio"
-	"fmt"
-	"net"
+	_ "fmt"
 	"secureconn"
-	"time"
+	"socks5proxy"
 )
 
 // func f()
@@ -30,16 +29,6 @@ import (
 //}
 
 func main() {
-	conn, err := net.Dial("tcp", "127.0.0.1:2014")
-	if err != nil {
-		fmt.Println(err)
-	} else {
-		sConn := secureconn.NewSecureConn(conn, secureconn.RC4, []byte{1, 2, 3})
-		//var str string
-		for {
-			sConn.Write([]byte{1, 2, 3, 4})
-			sConn.Write([]byte{5, 6, 7, 8})
-			time.Sleep(2000 * time.Millisecond)
-		}
-	}
+	sp := &socks5proxy.Socks5ProxyClient{}
+	sp.ListenAndServe("tcp", ":1081", "127.0.0.1:1080", secureconn.RC4, []byte{1, 2, 3})
 }

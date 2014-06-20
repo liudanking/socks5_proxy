@@ -1,37 +1,31 @@
-package main
+package socks5proxy
 
 import (
-	_ "bufio"
-	_ "errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"secureconn"
 	"socks5"
 	"strconv"
 )
 
-type Socks5ProxyClient struct {
+var (
+	DefaultKey = [...]byte{1, 2, 3}
+)
+
+const (
+	DefaultEncType     = secureconn.RC4
+	DefaultClienProxy  = ":1081"
+	DefaultServerProxy = "127.0.0.1:55467"
+)
+
+type Socks5Proxy struct {
+	key     []byte
+	encType int
 }
 
-func (sp *Socks5ProxyClient) ListenAndServe(network, localAddr string) {
-	listener, err := net.Listen(network, localAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer listener.Close()
-	fmt.Println("listen: ", network, localAddr)
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Fatal(err)
-		}
-		//defer conn.Close()
-		go handle(conn)
-	}
-}
-
-func handle(conn net.Conn) {
+func handleConnect(conn net.Conn, isClient bool, proxy string) {
 	buf := make([]byte, 262, 262)
 	if _, err := io.ReadFull(conn, buf[:3]); err != nil {
 		log.Fatal(err)
@@ -42,6 +36,7 @@ func handle(conn net.Conn) {
 		fmt.Printf("version 0x%02x not support", buf[0])
 	}
 	conn.Write([]byte{0x05, 0x00})
+
 	// 2. request
 	io.ReadFull(conn, buf[:4])
 	cmd := int(buf[1])
@@ -49,7 +44,10 @@ func handle(conn net.Conn) {
 	addr := ""
 	if addrType == 1 { // ipv4
 		io.ReadFull(conn, buf[:4])
-		addr = net.IPv4(buf[0], buf[1], buf[2], buf[3]).String()
+		addr = net.IPv4(buf[0],
+			buf[1],
+			buf[2],
+			buf[3]).String()
 		fmt.Println("address:", addr, buf[:4])
 	} else if addrType == 3 { // domain name
 		io.ReadFull(conn, buf[:1])
@@ -64,16 +62,19 @@ func handle(conn net.Conn) {
 	var remote net.Conn
 	if cmd == 1 { //   1. tcp connection
 		addrDest := fmt.Sprintf("%s:%d", addr, port)
-		//remoteTmp, err := net.Dial("tcp", addrDest)
-		//remoteTmp, err := socks5.DialSocksProxy(socks5.SOCKS5, "127.0.0.1:1080")("", addrDest)
-		remoteTmp, err := socks5.DialSocks5("127.0.0.1:1080", addrDest)
+		var remoteTmp net.Conn
+		var err error
+		if isClient {
+			remoteTmp, err = socks5.DialSocks5(proxy, addrDest)
+		} else {
+			remoteTmp, err = net.Dial("tcp", addrDest)
+		}
 		if err != nil {
 			fmt.Println("locate: ", err)
 			conn.Close()
-			remoteTmp.Close()
+			//remoteTmp.Close()
 			return
 		}
-
 		fmt.Println("connected to ", addr, port)
 		remote = remoteTmp
 		host, portStr, _ := net.SplitHostPort(remote.RemoteAddr().String())
@@ -84,30 +85,18 @@ func handle(conn net.Conn) {
 	} else { // command not supported
 		reply = []byte{0x05, 0x07, 0x00, 0x01}
 	}
-
 	conn.Write(reply)
 
 	if reply[1] == 0x00 { // transfer data
 		if cmd == 1 {
-			if false { // only for development
-				go handle_connection_direct(conn, remote)
-				go handle_connection_direct(remote, conn)
-			} else {
-				go handle_connection_encrypt(conn, remote)
-				go handle_connection_encrypt(remote, conn)
-			}
+			go handleTCP(conn, remote)
+			go handleTCP(remote, conn)
 		}
 	}
 
 }
 
-func handle_connection_direct(from, to net.Conn) {
-	io.Copy(to, from)
-	from.Close()
-	to.Close()
-}
-
-func handle_connection_encrypt(from, to net.Conn) {
+func handleTCP(from, to net.Conn) {
 	buf := make([]byte, 4096, 4096)
 	for {
 		length := 0
@@ -123,10 +112,4 @@ func handle_connection_encrypt(from, to net.Conn) {
 	}
 	from.Close()
 	to.Close()
-}
-
-func main() {
-	sp := &Socks5ProxyClient{}
-	sp.ListenAndServe("tcp", ":1081")
-
 }

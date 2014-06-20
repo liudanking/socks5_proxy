@@ -11,10 +11,12 @@ import (
 	"strconv"
 )
 
-type socks5proxy struct {
+type Socks5ProxyServer struct {
+	key     []byte
+	encType int
 }
 
-func (sp *socks5proxy) ListenAndServe(network, localAddr string) {
+func (sp *Socks5ProxyServer) ListenAndServe(network, localAddr string) {
 	listener, err := net.Listen(network, localAddr)
 	if err != nil {
 		log.Fatal(err)
@@ -32,7 +34,7 @@ func (sp *socks5proxy) ListenAndServe(network, localAddr string) {
 	}
 }
 
-func handle(conn secureconn.SecureConn) {
+func handle(conn *secureconn.SecureConn) {
 	buf := make([]byte, 262, 262)
 	if _, err := io.ReadFull(conn, buf[:3]); err != nil {
 		log.Fatal(err)
@@ -123,7 +125,7 @@ func handle_connection_encrypt(from, to net.Conn) {
 }
 
 func main() {
-	sp := &socks5proxy{}
+	sp := &Socks5ProxyServer{}
 	sp.ListenAndServe("tcp", ":1080")
 
 }
