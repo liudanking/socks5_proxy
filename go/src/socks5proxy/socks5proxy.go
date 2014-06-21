@@ -11,7 +11,11 @@ import (
 )
 
 var (
-	DefaultKey = [...]byte{1, 2, 3}
+	DefaultKey = []byte{
+		102, 57, 31, 13, 11, 131, 64, 191,
+		211, 221, 171, 121, 176, 173, 205, 1,
+		61, 5, 3, 7, 19, 23, 41, 37,
+		53, 61, 71, 91, 83, 99, 100}
 )
 
 const (
@@ -25,7 +29,7 @@ type Socks5Proxy struct {
 	encType int
 }
 
-func handleConnect(conn net.Conn, isClient bool, proxy string) {
+func (s *Socks5Proxy) handleConnect(conn net.Conn, isClient bool, proxy string) {
 	buf := make([]byte, 262, 262)
 	if _, err := io.ReadFull(conn, buf[:3]); err != nil {
 		log.Fatal(err)
@@ -65,7 +69,7 @@ func handleConnect(conn net.Conn, isClient bool, proxy string) {
 		var remoteTmp net.Conn
 		var err error
 		if isClient {
-			remoteTmp, err = socks5.DialSocks5(proxy, addrDest)
+			remoteTmp, err = socks5.DialSocks5(proxy, addrDest, s.encType, s.key)
 		} else {
 			remoteTmp, err = net.Dial("tcp", addrDest)
 		}
@@ -100,9 +104,9 @@ func handleTCP(from, to net.Conn) {
 	buf := make([]byte, 4096, 4096)
 	for {
 		length := 0
-		if _length, err := from.Read(buf); /*err == io.EOF &&*/ _length == 0 {
+		if _length, _ := from.Read(buf); /*err == io.EOF &&*/ _length == 0 {
 			length = _length
-			fmt.Println("io read over", length, err)
+			//fmt.Println("io read over", length, err)
 			break
 		} else {
 			length = _length

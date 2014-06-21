@@ -25,6 +25,6 @@ func (s *Socks5ProxyClient) ListenAndServe(network, localAddr, proxy string, enc
 			log.Fatal(err)
 		}
 		//defer conn.Close()
-		go handleConnect(conn, true, proxy)
+		go s.handleConnect(conn, true, proxy)
 	}
 }

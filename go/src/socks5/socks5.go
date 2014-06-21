@@ -72,14 +72,67 @@ func DialSocksProxy(socksType int, proxy string) func(string, string) (net.Conn,
 	}
 }
 
-func DialSocks5(proxy, targetAddr string) (conn net.Conn, err error) {
-	conn, err = dialSocks5(proxy, targetAddr)
+func DialSocks5(proxy, targetAddr string, encType int, key []byte) (conn net.Conn, err error) {
+	// conn, err = dialSocks5(proxy, targetAddr)
+	// conn = secureconn.MakeSecureConn(conn, encType, key)
+	// dial TCP
+	conn, err = secureconn.DialSecureConn("tcp", proxy, encType, key) // net.Dial("tcp", proxy)
+	if err != nil {
+		return
+	}
+
+	// version identifier/method selection request
+	req := []byte{
+		5, // version number
+		1, // number of methods
+		0, // method 0: no authentication (only anonymous access supported for now)
+	}
+	resp, err := sendReceive(conn, req)
+	if err != nil {
+		return
+	} else if len(resp) != 2 {
+		err = errors.New("Server does not respond properly.")
+	} else if resp[0] != 5 {
+		err = errors.New("Server does not support Socks 5.")
+	} else if resp[1] != 0 { // no auth
+		err = errors.New("socks method negotiation failed.")
+		return
+	}
+
+	// detail request
+	host, port, err := splitHostPort(targetAddr)
+	req = []byte{
+		5,               // version number
+		1,               // connect command
+		0,               // reserved, must be zero
+		3,               // address type, 3 means domain name
+		byte(len(host)), // address length
+	}
+	req = append(req, []byte(host)...)
+	req = append(req, []byte{
+		byte(port >> 8), // higher byte of destination port
+		byte(port),      // lower byte of destination port (big endian)
+	}...)
+	resp, err = sendReceive(conn, req)
+	if err != nil {
+		return
+	} else if len(resp) != 10 {
+		err = errors.New("Server does not respond properly.")
+	} else if resp[1] != 0 {
+		for _, value := range resp {
+			fmt.Printf("%02x ", value)
+		}
+		fmt.Printf("\n")
+
+		err = errors.New("Can't complete SOCKS5 connection.")
+	}
+
 	return
 }
 
 func dialSocks5(proxy, targetAddr string) (conn net.Conn, err error) {
 	// dial TCP
-	conn, err = secureconn.DialSecureConn("tcp", proxy, secureconn.RC4, []byte{1, 2, 3}) //net.Dial("tcp", proxy)
+	conn, err = /*secureconn.DialSecureConn("tcp", proxy, secureconn.RC4, []byte{1, 2, 3})*/ net.Dial("tcp", proxy)
 	if err != nil {
 		return
 	}

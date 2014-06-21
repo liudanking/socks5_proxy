@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	RC4 = iota // currently, only support RC4
-	WAKE
+	RC4  = iota // currently, only support RC4
+	PASS        // do not encrypt te wire
 )
 
 type SecureConn struct {
@@ -54,15 +54,17 @@ func (c *SecureConn) buildCipher(encType int, key []byte) {
 	case RC4:
 		c.cipherRead, _ = rc4.NewCipher(key)
 		c.cipherWrite, _ = rc4.NewCipher(key)
+	case PASS:
+		// do notheing, just pass
 	default:
 		fmt.Println("enctype invalid")
 	}
 }
 
 // override read function
-func (c SecureConn) Read(b []byte) (int, error) {
-	length, err := c.Conn.Read(b)
-	if length > 0 {
+func (c SecureConn) Read(b []byte) (length int, err error) {
+	length, err = c.Conn.Read(b)
+	if length > 0 && c.encType != PASS {
 		dst := make([]byte, length, length)
 		c.decrypt(dst, b[:length])
 		copy(b, dst)
@@ -71,11 +73,15 @@ func (c SecureConn) Read(b []byte) (int, error) {
 }
 
 // override wirte function
-func (c SecureConn) Write(b []byte) (int, error) {
-	dst := make([]byte, len(b), len(b))
-	copy(dst, b)
-	c.encrypt(dst, b)
-	length, err := c.Conn.Write(dst)
+func (c SecureConn) Write(b []byte) (length int, err error) {
+	if c.encType != PASS {
+		dst := make([]byte, len(b), len(b))
+		copy(dst, b)
+		c.encrypt(dst, b)
+		length, err = c.Conn.Write(dst)
+	} else {
+		length, err = c.Conn.Write(b)
+	}
 	return length, err
 }
 
@@ -83,10 +89,11 @@ func (c SecureConn) encrypt(dst, src []byte) {
 	if c.encType == RC4 {
 		if cipher, ok := c.cipherWrite.(*rc4.Cipher); ok {
 			cipher.XORKeyStream(dst, src)
-			fmt.Println("ENC")
+			//fmt.Println("ENC")
 		}
+	} else if c.encType == PASS {
+		// just pass do nothing
 	} else {
-		// pass
 		fmt.Println("encType not support: ", c.encType)
 	}
 }
@@ -95,10 +102,11 @@ func (c SecureConn) decrypt(dst, src []byte) {
 	if c.encType == RC4 {
 		if cipher, ok := c.cipherRead.(*rc4.Cipher); ok {
 			cipher.XORKeyStream(dst, src)
-			fmt.Println("DEC")
+			//fmt.Println("DEC")
 		}
+	} else if c.encType == PASS {
+		// just pass do nothing
 	} else {
-		// pass
 		fmt.Println("encType not support: ", c.encType)
 	}
 }
