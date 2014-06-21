@@ -110,3 +110,7 @@ func (c SecureConn) decrypt(dst, src []byte) {
 		fmt.Println("encType not support: ", c.encType)
 	}
 }
+
+func Prints() {
+	fmt.Println("...")
+}

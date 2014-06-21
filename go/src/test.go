@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"secureconn"
 )
 
 func f(a ...interface{}) {
@@ -14,4 +15,6 @@ func f(a ...interface{}) {
 
 func main() {
 	f("123", "456")
+	secureconn.Prints()
+
 }
