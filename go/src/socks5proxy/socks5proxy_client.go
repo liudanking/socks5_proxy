@@ -23,6 +23,8 @@ func (s *Socks5ProxyClient) ListenAndServe(network, localAddr, proxy string, enc
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Fatal(err)
+		} else {
+			fmt.Println("Accept connection: ", conn.RemoteAddr())
 		}
 		//defer conn.Close()
 		go s.handleConnect(conn, true, proxy)

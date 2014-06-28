@@ -31,7 +31,7 @@ type Socks5Proxy struct {
 
 func (s *Socks5Proxy) handleConnect(conn net.Conn, isClient bool, proxy string) {
 	buf := make([]byte, 262, 262)
-	if _, err := io.ReadFull(conn, buf[:3]); err != nil {
+	if _, err := io.ReadFull(conn, buf[:2]); err != nil {
 		log.Fatal(err)
 	}
 
@@ -39,10 +39,15 @@ func (s *Socks5Proxy) handleConnect(conn net.Conn, isClient bool, proxy string) 
 	if buf[0] != 0x05 {
 		fmt.Printf("version 0x%02x not support", buf[0])
 	}
+
+	length := int(buf[1])
+	io.ReadFull(conn, buf[:length])
+	fmt.Println(buf[:length])
 	conn.Write([]byte{0x05, 0x00})
 
 	// 2. request
 	io.ReadFull(conn, buf[:4])
+	fmt.Println(buf[:4])
 	cmd := int(buf[1])
 	addrType := int(buf[3])
 	addr := ""
@@ -58,13 +63,18 @@ func (s *Socks5Proxy) handleConnect(conn net.Conn, isClient bool, proxy string) 
 		length := int(buf[0])
 		io.ReadFull(conn, buf[:length])
 		addr = string(buf[:length])
+		fmt.Println("domain: ", addr)
+	} else if addrType == 4 { // ip v6
+		fmt.Println("ipv6 address not support")
+	} else {
+		fmt.Println("address type not support: ", addrType)
 	}
 	io.ReadFull(conn, buf[:2])
 	port := int(buf[0])<<8 + int(buf[1])
 	reply := []byte{0x05, 0x00, 0x00, 0x01}
 
 	var remote net.Conn
-	if cmd == 1 { //   1. tcp connection
+	if cmd == 0x01 { //   0x01: tcp connection
 		addrDest := fmt.Sprintf("%s:%d", addr, port)
 		var remoteTmp net.Conn
 		var err error
@@ -86,8 +96,15 @@ func (s *Socks5Proxy) handleConnect(conn net.Conn, isClient bool, proxy string) 
 		reply = append(reply, remoteIP[0], remoteIP[1], remoteIP[2], remoteIP[3])
 		port, _ := strconv.ParseUint(portStr, 10, 16)
 		reply = append(reply, byte(port>>8), byte(port))
+	} else if cmd == 0x02 { //	0x02: tcp bind
+		fmt.Println("0x02 BIND")
+		return
+	} else if cmd == 0x03 { //	0x03: udp associate
+		fmt.Println("0X03 UDP ACCOCIATE")
+		return
 	} else { // command not supported
 		reply = []byte{0x05, 0x07, 0x00, 0x01}
+		fmt.Printf("cmd:%d, %s:%d", cmd, addr, port)
 	}
 	conn.Write(reply)
 
