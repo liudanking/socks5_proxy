@@ -15,5 +15,5 @@ var (
 
 func main() {
 	sps := &socks5proxy.Socks5ProxyServer{}
-	sps.ListenAndServe("tcp", ":1080", secureconn.RC4, Key)
+	sps.ListenAndServe("tcp", ":1080", secureconn.PASS, Key)
 }
