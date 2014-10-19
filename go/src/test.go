@@ -5,10 +5,13 @@ import (
 	"net"
 )
 
+var updClient = make(map[string]*net.UDPAddr)
+
 func main() {
-	addr, _ := net.ResolveUDPAddr("udp", ":1087")
-	fmt.Println(addr)
+
+	addr, _ := net.ResolveUDPAddr("udp", ":0")
 	conn, err := net.ListenUDP("udp", addr)
+	fmt.Println(conn.LocalAddr())
 	if err != nil {
 		fmt.Println(err)
 		return

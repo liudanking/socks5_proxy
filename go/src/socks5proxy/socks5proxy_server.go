@@ -29,12 +29,4 @@ func (s *Socks5ProxyServer) ListenAndServe(network, localAddr string, encType in
 		//go s.handleConnect(sConn, false, "")
 		go s.serverHandleConnect(sConn)
 	}
-
-	for {
-		udpConn, err := net.ListenUDP("udp", ":1088")
-		if err != nil {
-			fmt.Println("udp listenupd error, ", err)
-		}
-
-	}
 }

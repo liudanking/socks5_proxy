@@ -8,6 +8,7 @@ import (
 	"secureconn"
 	"socks5"
 	"strconv"
+	"time"
 )
 
 var (
@@ -32,16 +33,22 @@ type Socks5Proxy struct {
 	udpServer  string // "2.3.4.5:2014"
 }
 
-func (s *Socks5Proxy) startUdpServer(net, addr string) {
-	udpAddr, _ := net.ResolveUDPAddr(net, addr)
-	conn, err := net.ListenUDP(net, udpAddr)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	b := make([]byte, 4096, 4096)
-	n, remoteAddr, errRead := conn.ReadFromUDP(b)
-}
+// func (s *Socks5Proxy) startUdpServer(net, addr string) {
+// 	udpAddr, _ := net.ResolveUDPAddr(net, addr)
+// 	conn, err := net.ListenUDP(net, udpAddr)
+// 	if err != nil {
+// 		fmt.Println(err)
+// 		return
+// 	}
+// 	b := make([]byte, 4096, 4096)
+// 	n, remoteAddr, errRead := conn.ReadFromUDP(b)
+// 	if errRead != nil {
+// 		fmt.Println(errRead)
+// 		return
+// 	}
+// 	addrStr := remoteAddr.String()
+
+// }
 
 func (s *Socks5Proxy) handleConnect(conn net.Conn, isClient bool, proxy string) {
 	buf := make([]byte, 262, 262)
@@ -150,18 +157,19 @@ func (s *Socks5Proxy) serverHandleConnect(conn net.Conn) {
 	conn.Write([]byte{0x05, 0x00}) // only support no auth method
 
 	// 2. request
-	cmd, addrType, addrStr, _, port := s.parseRequest(conn)
+	cmd, addrType, addrStr, addrByte, port := s.parseRequest(conn)
 
 	switch cmd {
 	case 0x01: // tcp connect
 		fmt.Println("CONNECT")
-		s.cmdConnect(conn, addrType, addrStr, port)
+		s.cmdConnect(conn, addrType, addrStr, addrByte, port)
 	case 0x02: // tcp bind
 		fmt.Println("BIND")
 		expectDst := fmt.Sprintf("%s:%d", addrStr, port)
 		s.cmdBind(conn, expectDst)
 	case 0x03: // udp associate
 		fmt.Println("UDP ASSOCIATE")
+		cmdUdpAssociate(conn, addrStr)
 	default: // unsupport cmd
 		fmt.Printf("cmd 0x%02x not supported\n", cmd)
 	}
@@ -224,23 +232,32 @@ func (s *Socks5Proxy) parseRequest(conn net.Conn) (cmd byte, addrType byte, addr
 	return
 }
 
-func (s *Socks5Proxy) cmdConnect(conn net.Conn, addrType byte, dstAddr string, dstPort int) {
+func (s *Socks5Proxy) cmdConnect(conn net.Conn, addrType byte, dstAddr string, dstAddrByte []byte, dstPort int) {
 	reply := []byte{0x05, 0x00, 0x00} // todo, only support ipv4 now
 	addrDest := ""
 	if addrType == 0x04 { // ipv6
 		addrDest = fmt.Sprintf("[%s]:%d", dstAddr, dstPort)
 	} else {
+		if dstAddr == "127.0.0.1" {
+			dstAddr = "54.201.98.241"
+			fmt.Println("for test")
+		}
 		addrDest = fmt.Sprintf("%s:%d", dstAddr, dstPort)
 	}
 	fmt.Println("prepare connect to ", addrDest)
-	remote, err := net.Dial("tcp", addrDest)
+	//remote, err := net.Dial("tcp", addrDest)
+	remote, err := net.DialTimeout("tcp", addrDest, time.Second*15)
 	if err != nil {
 		fmt.Println("locate: ", err)
+		reply = append(reply, addrType)
+		reply = append(reply, dstAddrByte...)
+		reply = append(reply, byte(dstPort>>8), byte(dstPort))
+		conn.Write(reply)
 		conn.Close()
 		return
 	}
 	fmt.Println("connected to ", addrDest, remote.RemoteAddr().String())
-	host, portStr, _ := net.SplitHostPort(remote.RemoteAddr().String())
+	host, portStr, _ := net.SplitHostPort(remote.LocalAddr().String())
 
 	remoteIP := net.ParseIP(host).To4()
 	if remoteIP == nil {
@@ -262,8 +279,13 @@ func (s *Socks5Proxy) cmdConnect(conn net.Conn, addrType byte, dstAddr string, d
 
 	// write to client
 	conn.Write(reply)
-	go handleTCP(conn, remote)
-	go handleTCP(remote, conn)
+	if true {
+		go io.Copy(conn, remote)
+		go io.Copy(remote, conn)
+	} else {
+		go handleTCP(conn, remote)
+		go handleTCP(remote, conn)
+	}
 }
 
 func (s *Socks5Proxy) cmdBind(conn net.Conn, expectDst string) {
@@ -321,5 +343,65 @@ func (s *Socks5Proxy) cmdBind(conn net.Conn, expectDst string) {
 }
 
 func cmdUdpAssociate(conn net.Conn, expectDst string) {
+	udpAddr, _ := net.ResolveUDPAddr("udp", ":0")
+	udpConn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	b := make([]byte, 4096, 4096)
 
+	for {
+		n, remoteAddr, errRead := udpConn.ReadFromUDP(b)
+		if errRead != nil {
+			fmt.Println(errRead)
+			return
+		}
+		addrStr := remoteAddr.String()
+		fmt.Println("UDP receive packet: ", b[:10])
+		fmt.Println("UDP remoteaddr: ", addrStr)
+		if addrStr == expectDst {
+			atyp := b[3]
+			dataIndex := 0
+			destAddr := ""
+			switch atyp {
+			case 0x01:
+				destAddr = fmt.Sprintf("%s:%d", net.IPv4(b[4], b[5], b[6], b[7]).String(), int(b[8])>>8+int(b[9]))
+				dataIndex = 10
+			case 0x03:
+				length := int(b[4])
+				destAddr = fmt.Sprintf("%s:%d", string(b[5:5+length]), int(b[5+length])>>8+int(b[6+length]))
+				dataIndex = 7 + length
+			case 0x04:
+				destAddr = fmt.Sprintf("[%s]:%d", net.IP(b[4:20]), int(b[21])>>8+int(b[22]))
+				dataIndex = 23
+			default:
+				fmt.Println("UDP not support addr: ", atyp)
+			}
+			fmt.Println("Relay In: ", atyp, destAddr)
+			sendUdp(udpConn, destAddr, b[dataIndex:n])
+		} else {
+			retBytes := packUdpPacket(remoteAddr, b[:n])
+			sendUdp(udpConn, expectDst, retBytes)
+
+		}
+	}
+}
+
+func sendUdp(conn *net.UDPConn, addr string, data []byte) {
+	udpAddr, _ := net.ResolveUDPAddr("udp", addr)
+	if n, err := conn.WriteTo(data, udpAddr); err != nil {
+		fmt.Println("send udp error: ", err)
+	} else {
+		fmt.Printf("upd send, data len: write, %d:%d\n", len(data), n)
+	}
+}
+
+func packUdpPacket(udpAddr *net.UDPAddr, data []byte) (retBytes []byte) {
+	fmt.Println("pack udp,", udpAddr.String())
+	retBytes = append(retBytes, 0x00, 0x00, 0x00, 0x01) // assume is ipv4 only
+	retBytes = append(retBytes, udpAddr.IP.To4()...)
+	retBytes = append(retBytes, byte(udpAddr.Port>>8), byte(udpAddr.Port))
+	retBytes = append(retBytes, data...)
+	return
 }
