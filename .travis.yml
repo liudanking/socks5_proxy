@@ -2,8 +2,8 @@ language: go
 go:
     - 1.4
 install:
-    - go build
+    - go install
 before_script:
-	- go get github.com/liudanking/socks5_proxy
+    - go get github.com/liudanking/socks5_proxy
 script:
     - exit 0
