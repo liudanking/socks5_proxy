@@ -2,10 +2,10 @@ package socks5proxy
 
 import (
 	"fmt"
+	"github.com/liudanking/socks5_proxy/secureconn"
 	"io"
 	"log"
 	"net"
-	"secureconn"
 	"socks5"
 	"strconv"
 	"time"

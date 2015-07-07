@@ -43,8 +43,8 @@ package socks5
 import (
 	"errors"
 	"fmt"
+	"github.com/liudanking/socks5_proxy/secureconn"
 	"net"
-	"secureconn"
 	"strconv"
 )
 

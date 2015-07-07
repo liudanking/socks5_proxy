@@ -2,9 +2,9 @@ package socks5proxy
 
 import (
 	"fmt"
+	"github.com/liudanking/socks5_proxy/secureconn"
 	"log"
 	"net"
-	"secureconn"
 )
 
 type Socks5ProxyServer struct {

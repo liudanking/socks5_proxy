@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"secureconn"
-	"socks5proxy"
+	"github.com/liudanking/socks5_proxy/secureconn"
+	"github.com/liudanking/socks5_proxy/socks5proxy"
 )
 
 func main() {
