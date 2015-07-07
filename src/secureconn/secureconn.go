@@ -12,7 +12,7 @@ import (
 
 const (
 	RC4  = iota // currently, only support RC4
-	PASS        // do not encrypt te wire
+	PASS        // do not encrypt the wire
 )
 
 type SecureConn struct {

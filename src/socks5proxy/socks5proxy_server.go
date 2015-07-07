@@ -26,7 +26,6 @@ func (s *Socks5ProxyServer) ListenAndServe(network, localAddr string, encType in
 			log.Fatal(err)
 		}
 		sConn := secureconn.MakeSecureConn(conn, s.encType, s.key)
-		//go s.handleConnect(sConn, false, "")
 		go s.serverHandleConnect(sConn)
 	}
 }
