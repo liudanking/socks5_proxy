@@ -1,4 +1,5 @@
 # Socks5 Proxy 
+[![Build Status](https://travis-ci.org/liudanking/socks5_proxy.svg?branch=master)](https://travis-ci.org/liudanking/socks5_proxy)
 
 A socks4 proxy written in Go.
 
